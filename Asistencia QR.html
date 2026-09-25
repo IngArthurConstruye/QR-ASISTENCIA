@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light" style="color-scheme: light;"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Asistencia QR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<style>
+:root{
+  --bg:#f5f6f8; --card:#ffffff; --text:#1a1d23; --muted:#6b7280;
+  --accent:#2f6fed; --accent2:#16a34a; --border:#e3e5e9; --danger:#dc2626;
+  box-sizing:border-box;
+  padding-top: env(safe-area-inset-top,0px);
+  padding-bottom: env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15171c; --card:#1f2229; --text:#eef0f3; --muted:#9aa1ac;
+    --accent:#5b8dff; --accent2:#22c55e; --border:#2c303a; --danger:#f87171;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15171c; --card:#1f2229; --text:#eef0f3; --muted:#9aa1ac;
+  --accent:#5b8dff; --accent2:#22c55e; --border:#2c303a; --danger:#f87171;
+}
+*{box-sizing:border-box;}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+header{position:sticky;top:0;padding-top:env(safe-area-inset-top,0px);background:var(--bg);border-bottom:1px solid var(--border);z-index:10;}
+.wrap{max-width:900px;margin:0 auto;padding:16px;}
+h1{font-size:1.25rem;margin:8px 0 12px;}
+.tabs{display:flex;gap:8px;padding:0 16px 12px;max-width:900px;margin:0 auto;}
+.tab{flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--muted);text-align:center;cursor:pointer;font-weight:600;font-size:.9rem;}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.panel{display:none;}
+.panel.active{display:block;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;}
+textarea{width:100%;min-height:140px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);padding:10px;font-size:.95rem;resize:vertical;}
+button{cursor:pointer;border:none;border-radius:10px;padding:10px 16px;font-weight:600;font-size:.9rem;background:var(--accent);color:#fff;}
+button.secondary{background:transparent;color:var(--accent);border:1px solid var(--accent);}
+button.danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}
+button:disabled{opacity:.5;cursor:not-allowed;}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.muted{color:var(--muted);font-size:.85rem;}
+.qrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:14px;}
+.qrcard{border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;background:#fff;color:#111;}
+.qrcard .name{font-size:.75rem;margin-top:6px;font-weight:600;word-break:break-word;}
+.qrcard .code{font-size:.65rem;color:#666;}
+#video-wrap{position:relative;max-width:420px;margin:0 auto;border-radius:12px;overflow:hidden;background:#000;}
+video{width:100%;display:block;}
+.scan-status{text-align:center;margin-top:10px;font-weight:600;min-height:1.4em;}
+.ok{color:var(--accent2);}
+.warn{color:var(--danger);}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:.88rem;}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border);}
+.stats{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;}
+.stat{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;}
+.stat b{font-size:1.3rem;display:block;}
+@media print{
+  header,.tabs,.no-print{display:none !important;}
+  .panel{display:block !important;}
+  body{background:#fff;}
+  .qrcard{break-inside:avoid;}
+}
+.overflow{overflow-x:auto;}
+</style>
+</head>
+<body>
+<script id="state-data" type="application/json">{"roster":[{"name":"arturo","code":"A001-WFKQ"},{"name":"josue","code":"A002-LUYG"},{"name":"luis","code":"A003-ZJA7"},{"name":"naomi","code":"A004-DPOK"}],"attendance":[]}</script>
+
+<header>
+  <div class="wrap"><h1>📋 Asistencia por QR</h1></div>
+</header>
+<div class="tabs">
+  <div class="tab active" data-tab="setup">1. Generar códigos</div>
+  <div class="tab" data-tab="scan">2. Tomar asistencia</div>
+</div>
+
+<div class="wrap">
+
+  <div class="panel active" id="panel-setup">
+    <div class="card no-print">
+      <p class="muted">Pega la lista de tus alumnos (un nombre por línea). Se generará un código QR único para cada uno.</p>
+      <textarea id="names-input" placeholder="Ana García
+Luis Pérez
+María López
+..."></textarea>
+      <div class="row">
+        <button id="btn-generate">Generar códigos QR</button>
+        <button class="secondary" id="btn-print">Imprimir / Guardar como PDF</button>
+      </div>
+      <p class="muted" id="setup-msg">4 códigos generados. Puedes imprimirlos.</p>
+    </div>
+    <div class="qrgrid" id="qr-grid"><div class="qrcard"><div title="A001-WFKQ"><canvas width="110" height="110" style="display: none;"></canvas><img src="data:image/png;base64,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" style="display: block;"></div><div class="name">arturo</div><div class="code">A001-WFKQ</div></div><div class="qrcard"><div title="A002-LUYG"><canvas width="110" height="110" style="display: none;"></canvas><img src="data:image/png;base64,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" style="display: block;"></div><div class="name">josue</div><div class="code">A002-LUYG</div></div><div class="qrcard"><div title="A003-ZJA7"><canvas width="110" height="110" style="display: none;"></canvas><img src="data:image/png;base64,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" style="display: block;"></div><div class="name">luis</div><div class="code">A003-ZJA7</div></div><div class="qrcard"><div title="A004-DPOK"><canvas width="110" height="110" style="display: none;"></canvas><img src="data:image/png;base64,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" style="display: block;"></div><div class="name">naomi</div><div class="code">A004-DPOK</div></div></div>
+  </div>
+
+  <div class="panel" id="panel-scan">
+    <div class="card">
+      <div id="video-wrap">
+        <video id="video" playsinline="" muted=""></video>
+      </div>
+      <canvas id="canvas" style="display:none;"></canvas>
+      <div class="scan-status" id="scan-status">Presiona "Iniciar cámara" para comenzar</div>
+      <div class="row no-print" style="justify-content:center;">
+        <button id="btn-start-scan">Iniciar cámara</button>
+        <button class="secondary" id="btn-stop-scan" disabled="">Detener</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="stats">
+        <div class="stat"><b id="stat-present">0</b><span class="muted">Presentes</span></div>
+        <div class="stat"><b id="stat-total">4</b><span class="muted">Total alumnos</span></div>
+      </div>
+      <div class="row no-print">
+        <button class="secondary" id="btn-export">Exportar CSV</button>
+        <button class="danger" id="btn-reset">Reiniciar asistencia</button>
+      </div>
+      <div class="overflow">
+        <table>
+          <thead><tr><th>#</th><th>Alumno</th><th>Hora</th></tr></thead>
+          <tbody id="attendance-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let STATE = JSON.parse(document.getElementById('state-data').textContent);
+let artifactCap = null, downloadsCap = null;
+
+(async function initCaps(){
+  try{ artifactCap = await claude.use('artifact'); }catch(e){}
+  try{ downloadsCap = await claude.use('downloads'); }catch(e){}
+  document.getElementById('btn-export').style.display = downloadsCap ? '' : 'none';
+})();
+
+function genCode(i){
+  return 'A' + (i+1).toString().padStart(3,'0') + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+}
+
+function buildHtmlForPublish(){
+  const doc = document.cloneNode(true);
+  doc.getElementById('state-data').textContent = JSON.stringify(STATE);
+  return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+}
+
+let saveTimer=null;
+function persist(){
+  if(!artifactCap) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async ()=>{
+    try{ await artifactCap.publish(buildHtmlForPublish()); }catch(e){}
+  }, 400);
+}
+
+// ---- Tabs ----
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('panel-'+t.dataset.tab).classList.add('active');
+  });
+});
+
+// ---- Setup / generate ----
+function renderGrid(){
+  const grid = document.getElementById('qr-grid');
+  grid.innerHTML = '';
+  STATE.roster.forEach(s=>{
+    const card = document.createElement('div');
+    card.className = 'qrcard';
+    const qrDiv = document.createElement('div');
+    card.appendChild(qrDiv);
+    const name = document.createElement('div');
+    name.className = 'name'; name.textContent = s.name;
+    const code = document.createElement('div');
+    code.className = 'code'; code.textContent = s.code;
+    card.appendChild(name); card.appendChild(code);
+    grid.appendChild(card);
+    new QRCode(qrDiv, {text: s.code, width:110, height:110});
+  });
+  document.getElementById('stat-total').textContent = STATE.roster.length;
+}
+
+document.getElementById('btn-generate').addEventListener('click', ()=>{
+  const lines = document.getElementById('names-input').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(lines.length===0){ document.getElementById('setup-msg').textContent='Escribe al menos un nombre.'; return; }
+  if(STATE.attendance.length>0 && !confirm('Ya hay asistencia registrada. Generar una nueva lista borrará esos registros. ¿Continuar?')) return;
+  STATE.roster = lines.map((name,i)=>({name, code: genCode(i)}));
+  STATE.attendance = [];
+  renderGrid();
+  renderAttendance();
+  document.getElementById('setup-msg').textContent = STATE.roster.length + ' códigos generados. Puedes imprimirlos.';
+  persist();
+});
+
+document.getElementById('btn-print').addEventListener('click', ()=> window.print());
+
+// ---- Scanning ----
+let stream=null, scanning=false;
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('scan-status');
+let lastMsgTimer=null;
+
+document.getElementById('btn-start-scan').addEventListener('click', async ()=>{
+  if(STATE.roster.length===0){ statusEl.textContent='Primero genera los códigos en la pestaña 1.'; statusEl.className='scan-status warn'; return; }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    video.srcObject = stream;
+    await video.play();
+    scanning = true;
+    document.getElementById('btn-start-scan').disabled = true;
+    document.getElementById('btn-stop-scan').disabled = false;
+    statusEl.textContent = 'Escaneando... apunta al código QR';
+    statusEl.className='scan-status';
+    requestAnimationFrame(tick);
+  }catch(e){
+    statusEl.textContent = 'No se pudo acceder a la cámara. Revisa los permisos.';
+    statusEl.className='scan-status warn';
+  }
+});
+
+document.getElementById('btn-stop-scan').addEventListener('click', stopScan);
+function stopScan(){
+  scanning = false;
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  document.getElementById('btn-start-scan').disabled = false;
+  document.getElementById('btn-stop-scan').disabled = true;
+  statusEl.textContent = 'Cámara detenida';
+}
+
+function tick(){
+  if(!scanning) return;
+  if(video.readyState === video.HAVE_ENOUGH_DATA){
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const img = ctx.getImageData(0,0,canvas.width,canvas.height);
+    const code = jsQR(img.data, img.width, img.height);
+    if(code && code.data){ handleScan(code.data); }
+  }
+  requestAnimationFrame(tick);
+}
+
+function handleScan(text){
+  const student = STATE.roster.find(s=>s.code===text);
+  if(!student){ flashStatus('Código no reconocido', true); return; }
+  const already = STATE.attendance.find(a=>a.code===text);
+  if(already){ flashStatus(student.name + ' ya estaba registrado', true); return; }
+  const now = new Date();
+  STATE.attendance.push({code: student.code, name: student.name, time: now.toLocaleTimeString()});
+  flashStatus('✔ ' + student.name + ' registrado', false);
+  renderAttendance();
+  persist();
+}
+
+function flashStatus(msg, warn){
+  statusEl.textContent = msg;
+  statusEl.className = 'scan-status ' + (warn ? 'warn' : 'ok');
+  clearTimeout(lastMsgTimer);
+  lastMsgTimer = setTimeout(()=>{ if(scanning){ statusEl.textContent='Escaneando... apunta al código QR'; statusEl.className='scan-status'; } },1500);
+}
+
+function renderAttendance(){
+  const body = document.getElementById('attendance-body');
+  body.innerHTML = '';
+  STATE.attendance.forEach((a,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+(i+1)+'</td><td>'+a.name+'</td><td>'+a.time+'</td>';
+    body.appendChild(tr);
+  });
+  document.getElementById('stat-present').textContent = STATE.attendance.length;
+  document.getElementById('stat-total').textContent = STATE.roster.length;
+}
+
+document.getElementById('btn-reset').addEventListener('click', ()=>{
+  if(!confirm('¿Borrar toda la asistencia registrada?')) return;
+  STATE.attendance = [];
+  renderAttendance();
+  persist();
+});
+
+document.getElementById('btn-export').addEventListener('click', async ()=>{
+  if(!downloadsCap) return;
+  let csv = 'Nombre,Codigo,Hora\n';
+  STATE.attendance.forEach(a=>{ csv += '"'+a.name+'","'+a.code+'","'+a.time+'"\n'; });
+  try{
+    await downloadsCap.save({filename:'asistencia_'+new Date().toISOString().slice(0,10)+'.csv', data: csv});
+  }catch(e){}
+});
+
+// initial render
+renderGrid();
+renderAttendance();
+</script>
+
+
+</body></html>
